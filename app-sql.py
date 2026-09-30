@@ -1,22 +1,35 @@
 import streamlit as st
+import sqlite3
 import pandas as pd
 import plotly.express as px
 
-st.set_page_config(page_title="Soporte PRO", layout="wide")
-st.title("📊 Dashboard PRO - 10K Tickets")
+st.set_page_config(page_title="Soporte SQL", layout="wide")
+st.title("📊 Proyecto 2: Dashboard con SQL REAL")
 
-@st.cache_data
-def load_data():
-    return pd.read_csv('tickets_10k.csv')
-df = load_data()
+conn = sqlite3.connect('soporte.db')
 
-c1,c2,c3,c4 = st.columns(4)
-c1.metric("Total", len(df))
-c2.metric("Tiempo Prom", f"{df['tiempo_resolucion_horas'].mean():.1f}h")
-c3.metric("Satisfacción", f"{df['satisfaccion'].mean():.2f}/5")
-c4.metric("Escalados", len(df[df['estado']=='Escalado']))
+# CONSULTA 1: La que te preguntan en entrevista
+st.subheader("1. Tiempo promedio por categoría (con SQL)")
+q1 = "SELECT categoria, AVG(tiempo_resolucion_horas) as promedio FROM tickets GROUP BY categoria"
+df1 = pd.read_sql(q1, conn)
+st.dataframe(df1)
+st.plotly_chart(px.bar(df1, x='categoria', y='promedio'))
 
-df_f = df[df['categoria'].isin(st.sidebar.multiselect("Categoría", df['categoria'].unique(), default=df['categoria'].unique()))]
+# CONSULTA 2
+st.subheader("2. Top agentes con más escalados")
+q2 = "SELECT agente, COUNT(*) as escalados FROM tickets WHERE estado='Escalado' GROUP BY agente ORDER BY escalados DESC"
+st.dataframe(pd.read_sql(q2, conn))
 
-fig = px.bar(df_f.groupby('categoria')['tiempo_resolucion_horas'].mean().reset_index(), x='categoria', y='tiempo_resolucion_horas', title='Tiempo por Categoría')
-st.plotly_chart(fig)
+# CONSULTA 3
+st.subheader("3. Clientes en riesgo (satisfaccion < 3 y más de 2 tickets)")
+q3 = """
+SELECT cliente, COUNT(*) as num_tickets, AVG(satisfaccion) as sat_prom 
+FROM tickets 
+GROUP BY cliente 
+HAVING sat_prom < 3 AND num_tickets > 2
+ORDER BY sat_prom ASC
+LIMIT 10
+"""
+st.dataframe(pd.read_sql(q3, conn))
+
+conn.close()
